@@ -42,8 +42,6 @@ function getDayInCsv() {
     const currentDayDate = new Date(
       Date.parse(`${dateContainer.textContent} ${currentYearHolder.textContent}`)
     );
-
-    console.log(currentDayDate, 'currentDayDate')
   
     const plannerWrapper = document.querySelector('[class*="calendar-view-hours-inner-container"]');
     const plannerDayWrappers = plannerWrapper.querySelectorAll('[class*="calendar-view-day-container"]')
@@ -63,7 +61,38 @@ function getDayInCsv() {
       return (posA || 0) - (posB || 0)
     })
 
-    let csv = 'date,name,unit_amount';
+    const workEntries = new (function() {
+      const _data = {};
+      const add = (title, minutesSpent, date) => {
+        if (!_data[title]) {
+          _data[title] = {
+            minutesSpent,
+            date,
+            title,
+          }
+        } else {
+          _data[title].minutesSpent += minutesSpent
+        }
+      } 
+
+      const serialize = () => {
+        const rows = Object.values(_data).map(({minutesSpent, date, title}) => ([
+          '',
+          date,
+          '23',
+          '37', // project id: 37,14?
+          `"${title}"`, // make sure commas in the title won't mess things up
+          `${minutesSpent / 60}`,
+        ].join(',')));
+
+        return `id,date,employee_id/.id,project_id/.id,name,unit_amount\n${rows.join("\n")}`
+      } 
+      return {
+        add,
+        serialize,
+      }
+    })();
+
     notableEvents.forEach((eventWrapper) => {
       const timeContainer = eventWrapper.querySelector('[class*="calendar-view-event-item-date"]');
       const titleContainer = eventWrapper.querySelector(
@@ -74,27 +103,17 @@ function getDayInCsv() {
         const [fromTime, toTime] = timeContainer.textContent
           .split(/\s*-\s*/)
           .map(normalizeHours);
-        const minutesSpent = toMinutes(toTime) - toMinutes(fromTime);
-        const row = [
-          `${currentDayDate.getDate()}/${
-            currentDayDate.getMonth() + 1
-          }/${currentDayDate.getFullYear()}`,
-          `${titleContainer.textContent}`,
-          `${minutesSpent / 60}`,
-        ].join(',');
-        csv = `${csv}\n${row}`;
-      } else {
-        const row = [
-          `${currentDayDate.getDate()}/${
-            currentDayDate.getMonth() + 1
-          }/${currentDayDate.getFullYear()}`,
-          `${titleContainer.textContent}`,
-          `???`,
-        ].join(',');
-        csv = `${csv}\n${row}`;
+        let minutesSpent = toMinutes(toTime) - toMinutes(fromTime);
+        if (minutesSpent < 0) {
+          minutesSpent += 12*60 // Normalize interval around 12PM
+        }
+
+        workEntries.add(titleContainer.textContent, minutesSpent, `${
+          currentDayDate.getMonth() + 1
+        }/${currentDayDate.getDate()}/${currentDayDate.getFullYear()}`)
       }
     });
   
-    return csv;
+    return workEntries.serialize();
   }
   
